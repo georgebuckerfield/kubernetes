@@ -499,6 +499,11 @@ type FakeELBV2 struct {
 	aws *FakeAWSServices
 }
 
+// AddListenerCertificates is not implemented but is required for interface conformance
+func (elb *FakeELBV2) AddListenerCertificates(input *elbv2.AddListenerCertificatesInput) (*elbv2.AddListenerCertificatesOutput, error) {
+	panic("Not implemented")
+}
+
 // AddTags is not implemented but is required for interface conformance
 func (elb *FakeELBV2) AddTags(input *elbv2.AddTagsInput) (*elbv2.AddTagsOutput, error) {
 	panic("Not implemented")

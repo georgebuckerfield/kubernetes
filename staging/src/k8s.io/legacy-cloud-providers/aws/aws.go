@@ -355,6 +355,7 @@ type ELB interface {
 
 // ELBV2 is a simple pass-through of AWS' ELBV2 client interface, which allows for testing
 type ELBV2 interface {
+	AddListenerCertificates(input *elbv2.AddListenerCertificatesInput) (*elbv2.AddListenerCertificatesOutput, error)
 	AddTags(input *elbv2.AddTagsInput) (*elbv2.AddTagsOutput, error)
 
 	CreateLoadBalancer(*elbv2.CreateLoadBalancerInput) (*elbv2.CreateLoadBalancerOutput, error)
@@ -3559,6 +3560,7 @@ func buildListener(port v1.ServicePort, annotations map[string]string, sslPorts 
 	listener := &elb.Listener{}
 	listener.InstancePort = &instancePort
 	listener.LoadBalancerPort = &loadBalancerPort
+	// TODO: Handle multiple certificates here (discard extras)
 	certID := annotations[ServiceAnnotationLoadBalancerCertificate]
 	if certID != "" && (sslPorts == nil || sslPorts.numbers.Has(loadBalancerPort) || sslPorts.names.Has(portName)) {
 		instanceProtocol = annotations[ServiceAnnotationLoadBalancerBEProtocol]

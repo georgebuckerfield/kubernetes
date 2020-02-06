@@ -80,8 +80,9 @@ type nlbPortMapping struct {
 	HealthCheckPath     string
 	HealthCheckProtocol string
 
-	SSLCertificateARN string
-	SSLPolicy         string
+	SSLCertificateARN       string
+	SSLExtraCertificateARNs []string
+	SSLPolicy               string
 }
 
 // getLoadBalancerAdditionalTags converts the comma separated list of key-value
@@ -223,6 +224,7 @@ func (c *Cloud) ensureLoadBalancerv2(namespacedName types.NamespacedName, loadBa
 							if aws.StringValue(listener.SslPolicy) != mapping.SSLPolicy {
 								listenerNeedsModification = true
 							}
+							// TODO (GB): Handle multiple certificates
 							if len(listener.Certificates) == 0 || aws.StringValue(listener.Certificates[0].CertificateArn) != mapping.SSLCertificateARN {
 								listenerNeedsModification = true
 							}
@@ -259,6 +261,7 @@ func (c *Cloud) ensureLoadBalancerv2(namespacedName types.NamespacedName, loadBa
 					}
 
 					if listenerNeedsModification {
+						mapping.SSLExtraCertificateARNs = getSSLCertsFromAnnotation(mapping.SSLCertificateARN)
 						modifyListenerInput := &elbv2.ModifyListenerInput{
 							ListenerArn: listener.ListenerArn,
 							Port:        aws.Int64(frontendPort),
@@ -272,6 +275,7 @@ func (c *Cloud) ensureLoadBalancerv2(namespacedName types.NamespacedName, loadBa
 							if mapping.SSLPolicy != "" {
 								modifyListenerInput.SslPolicy = aws.String(mapping.SSLPolicy)
 							}
+							// TODO (GB): Handle multiple certificates
 							modifyListenerInput.Certificates = []*elbv2.Certificate{
 								{
 									CertificateArn: aws.String(mapping.SSLCertificateARN),
@@ -280,6 +284,20 @@ func (c *Cloud) ensureLoadBalancerv2(namespacedName types.NamespacedName, loadBa
 						}
 						if _, err := c.elbv2.ModifyListener(modifyListenerInput); err != nil {
 							return nil, fmt.Errorf("error updating load balancer listener: %q", err)
+						}
+						if len(mapping.SSLExtraCertificateARNs) > 0 {
+							for _, arn := range mapping.SSLExtraCertificateARNs {
+								addListenerCertificateInput := &elbv2.AddListenerCertificatesInput{
+									Certificates: []*elbv2.Certificate{
+										{
+											CertificateArn: aws.String(arn),
+										},
+									},
+								}
+								if _, err := c.elbv2.AddListenerCertificates(addListenerCertificateInput); err != nil {
+									return nil, fmt.Errorf("error adding additional listener certificates: %q", err)
+								}
+							}
 						}
 					}
 
@@ -1535,4 +1553,9 @@ func (c *Cloud) findInstancesForELB(nodes []*v1.Node) (map[InstanceID]*ec2.Insta
 	// We ignore instances that cannot be found
 
 	return instances, nil
+}
+
+func getSSLCertsFromAnnotation(annotation string) []string {
+	arns := strings.Split(annotation, ",")
+	return arns[1:]
 }
